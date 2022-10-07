@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+
+import csv
+import os
+import subprocess
+import sys
+
+DIR_PATH = os.path.expanduser("~/.config/sshc")
+INSTANCE_PATH = os.path.expanduser("~/.config/sshc/servers")
+
+try:
+  open(INSTANCE_PATH)
+except FileNotFoundError:
+  os.mkdir(DIR_PATH)
+  open(INSTANCE_PATH, "+w")
+
+def connect():
+  server = select_server()
+
+  if server["port"] == "22":
+    print("ssh {}@{}".format(server["user"], server["ip"]))
+    subprocess.run(
+      ["ssh", "{}@{}".format(server["user"], server["ip"])]
+    )
+  else:
+    print("ssh -p {} {}@{}".format(
+      server["port"],
+      server["user"],
+      server["ip"]
+    ))
+    subprocess.run(["ssh", "-p", server["port"], "{}@{}".format(server["user"], server["ip"])])
+
+def select_server():
+  servers = load_servers()
+
+  print("Select server:\n")
+  for index, server in enumerate(servers):
+    print("{}) {}".format(index+1, server["name"]))
+  
+  try: 
+    choice = int(input("\n> "))
+    if choice not in range(1, len(servers)):
+      exit()
+  except ValueError:
+    exit(1)
+  except KeyboardInterrupt:
+    exit()
+
+  return servers[choice - 1]
+
+def load_servers():
+  with open(INSTANCE_PATH, "r") as f:
+    servers = []
+    csv_reader = csv.reader(f)
+    for server in csv_reader:
+      servers.append(csv_to_dict(server))
+    return servers
+
+def csv_to_dict(server):
+  return {
+    "name": server[0],
+    "user": server[1],
+    "ip": server[2],
+    "port": server[3]
+  }
+
+if __name__ == "__main__":
+  try:
+    arg = sys.argv[1]
+  except IndexError:
+    connect()
+    exit()
+
+  if arg == "add":
+    add_server()
+    exit()
+  elif arg == "edit":
+    edit_server()
+    exit()
+  elif arg == "list" or arg == "ls":
+    list_servers()
+    exit()
+  elif arg == "remove" or arg == "rm":
+    remove_server()
+    exit()
+  else:
+    print("sshc: command not found: {}".format(arg))
