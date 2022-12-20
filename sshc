@@ -16,10 +16,10 @@ def connect():
 
     if server["port"] == "22":
         print("\nssh {}@{}".format(server["user"], server["ip"]))
-        os.execvp("ssh", ["ssh", "{}@{}".format(server["user"], server["ip"])])
+        os.execv("ssh", ["ssh", "{}@{}".format(server["user"], server["ip"])])
     else:
         print("\nssh -p {} {}@{}".format(server["port"], server["user"], server["ip"]))
-        os.execvp("ssh", ["ssh", "-p", server["port"], "{}@{}".format(server["user"], server["ip"])])
+        os.execv("ssh", ["ssh", "-p", server["port"], "{}@{}".format(server["user"], server["ip"])])
 
 def add_server():
     server = prompt_server_info()
