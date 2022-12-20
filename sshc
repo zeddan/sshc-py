@@ -155,7 +155,8 @@ if __name__ == "__main__":
             elif command in ["remove", "rm"]:
                 remove_server()
             else:
-                connect()
+                print(f"sshc: command not found: {sys.argv[1]}") 
+                exit(1)
         except KeyboardInterrupt:
             exit(0)
     else:
