@@ -2,86 +2,161 @@
 
 import csv
 import os
-import subprocess
 import sys
 
 DIR_PATH = os.path.expanduser("~/.config/sshc")
 INSTANCE_PATH = os.path.expanduser("~/.config/sshc/servers")
 
-try:
-  open(INSTANCE_PATH)
-except FileNotFoundError:
-  os.mkdir(DIR_PATH)
-  open(INSTANCE_PATH, "+w")
+if not (os.path.isdir(DIR_PATH) and os.path.isfile(INSTANCE_PATH)):
+    os.system("mkdir -p " + DIR_PATH)
+    open(INSTANCE_PATH, "w").close()
 
 def connect():
-  server = select_server()
+    server = select_server()
 
-  if server["port"] == "22":
-    print("ssh {}@{}".format(server["user"], server["ip"]))
-    subprocess.run(
-      ["ssh", "{}@{}".format(server["user"], server["ip"])]
+    if server["port"] == "22":
+        print("\nssh {}@{}".format(server["user"], server["ip"]))
+        os.execvp("ssh", ["ssh", "{}@{}".format(server["user"], server["ip"])])
+    else:
+        print("\nssh -p {} {}@{}".format(server["port"], server["user"], server["ip"]))
+        os.execvp("ssh", ["ssh", "-p", server["port"], "{}@{}".format(server["user"], server["ip"])])
+
+def add_server():
+    server = prompt_server_info()
+    append_to_file(server)
+    print("OK!")
+
+def edit_server():
+    server = select_server()
+    edited_server = prompt_server_info(
+        server["name"],
+        server["user"],
+        server["ip"],
+        server["port"]
     )
-  else:
-    print("ssh -p {} {}@{}".format(
-      server["port"],
-      server["user"],
-      server["ip"]
-    ))
-    subprocess.run(["ssh", "-p", server["port"], "{}@{}".format(server["user"], server["ip"])])
+    edit_in_file(server, edited_server)
+    print("OK!")
 
-def select_server():
-  servers = load_servers()
+def list_servers():
+    servers = load_servers()
+    if servers is None or not servers:
+        return
 
-  print("Select server:\n")
-  for index, server in enumerate(servers):
-    print("{}) {}".format(index+1, server["name"]))
-  
-  try: 
-    choice = int(input("\n> "))
-    if choice not in range(1, len(servers)):
-      exit()
-  except ValueError:
-    exit(1)
-  except KeyboardInterrupt:
-    exit()
+    widths = [widest_column_width(s["name"] for s in servers),
+              widest_column_width(s["user"] for s in servers),
+              widest_column_width(s["ip"] for s in servers)]
+    pretty_print("NAME", "USER", "IP", "PORT", widths)
+    for s in servers:
+        pretty_print(s["name"], s["user"], s["ip"], s["port"], widths)
 
-  return servers[choice - 1]
-
-def load_servers():
-  with open(INSTANCE_PATH, "r") as f:
-    servers = []
-    csv_reader = csv.reader(f)
-    for server in csv_reader:
-      servers.append(csv_to_dict(server))
-    return servers
+def remove_server():
+    server_to_remove = select_server()
+    with open(INSTANCE_PATH, "r") as in_file:
+        servers = in_file.readlines()
+    with open(INSTANCE_PATH, "w") as out_file:
+        for server in servers:
+            if server_to_remove != csv_to_hash(server.strip().split(",")):
+                out_file.write(server)
+    print("OK!")
 
 def csv_to_dict(server):
-  return {
-    "name": server[0],
-    "user": server[1],
-    "ip": server[2],
-    "port": server[3]
-  }
+    return {
+        "name": server[0],
+        "user": server[1],
+        "ip": server[2],
+        "port": server[3]
+    }
+
+def select_server():
+    servers = load_servers()
+
+    print("Select server:\n")
+    for idx, server in enumerate(servers, 1):
+        print("{}) {}".format(idx, server["name"]))
+    print("\n> ", end="")
+
+
+    choice = int(input())
+    if not (1 <= choice <= len(servers)):
+        exit(1)
+    return servers[choice - 1]
+
+def load_servers():
+    with open(INSTANCE_PATH, "r") as f:
+        servers = []
+        csv_reader = csv.reader(f)
+        for server in csv_reader:
+            servers.append(csv_to_dict(server))
+        return servers
+
+def prompt_server_info(name="", user="", ip="", port="22"):
+    name = prompt_value("Name", name)
+    user = prompt_value("User", user)
+    ip = prompt_value("IP", ip)
+    port = prompt_value("Port", port)
+
+    print("Add {} for {}@{}:{}? (Y/n) ".format(name, user, ip, port), end="")
+
+    confirm = input().strip().lower()
+    if confirm in ["y", ""]:
+        return "{},{},{},{}".format(name, user, ip, port)
+    elif confirm == "n":
+        return prompt_server_info(name, user, ip, port)
+
+def append_to_file(server):
+    with open(INSTANCE_PATH, "a") as file:
+        file.write(server + "\n")
+
+def edit_in_file(server, edited_server):
+    with open(INSTANCE_PATH, "r") as in_file:
+        servers = in_file.readlines()
+    with open(INSTANCE_PATH, "w") as out_file:
+        for s in servers:
+            if s.strip() == csv_to_hash(server).values().join(","):
+                out_file.write(edited_server + "\n")
+            else:
+                out_file.write(s)
+
+def pretty_print(name, user, ip, port, widths):
+    row_format = "{{:<{}}} {{:<{}}} {{:<{}}} {{:<}}".format(*widths)
+    print(row_format.format(name, user, ip, port))
+
+def prompt_value(label, default=""):
+    print("{}: ({}) ".format(label, default), end="")
+    value = input().strip()
+    return value if value else default
+
+def widest_column_width(values):
+    max_length = 0
+    for value in values:
+        value_length = len(value)
+        if value_length > max_length:
+            max_length = value_length
+    return max_length + 2
+
+def csv_to_hash(server):
+    return {
+        "name": server[0],
+        "user": server[1],
+        "ip": server[2],
+        "port": server[3]
+    }
 
 if __name__ == "__main__":
-  try:
-    arg = sys.argv[1]
-  except IndexError:
-    connect()
-    exit()
-
-  if arg == "add":
-    add_server()
-    exit()
-  elif arg == "edit":
-    edit_server()
-    exit()
-  elif arg == "list" or arg == "ls":
-    list_servers()
-    exit()
-  elif arg == "remove" or arg == "rm":
-    remove_server()
-    exit()
-  else:
-    print("sshc: command not found: {}".format(arg))
+    if len(sys.argv) > 1:
+        command = sys.argv[1]
+        try:
+            if command == "add":
+                add_server()
+            elif command == "edit":
+                edit_server()
+            elif command in ["list", "ls"]:
+                list_servers()
+            elif command in ["remove", "rm"]:
+                remove_server()
+            else:
+                connect()
+        except KeyboardInterrupt:
+            exit(0)
+    else:
+        connect()
